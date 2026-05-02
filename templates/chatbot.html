@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Level Advisor Chatbot</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  </head>
+  <body>
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h3>Advisor</h3>
+        <p>Select who to talk to</p>
+      </div>
+
+      <form method="post" id="advisorForm">
+        <ul class="advisor-list">
+          {% set colors =
+          ['#e74c3c','#8e44ad','#2980b9','#16a085','#d35400','#c0392b','#27ae60','#2471a3','#884ea0']
+          %} {% for adv in advisors %}
+          <li
+            class="advisor-item{% if adv == selected_advisor %} selected{% endif %}"
+          >
+            <label>
+              <input
+                type="radio"
+                name="advisor"
+                value="{{ adv }}"
+                onchange="document.getElementById('advisorForm').submit()"
+                {% if adv == selected_advisor %}checked{% endif %}
+              />
+              <span
+                class="advisor-avatar"
+                style="background: {{ colors[loop.index0 % colors|length] }}"
+                >{{ adv.split(' ')[-1][0] }}</span
+              >
+              {{ adv }}
+            </label>
+          </li>
+          {% endfor %}
+        </ul>
+      </form>
+
+      <div class="ai-provider-box">
+        <h4>AI Engine</h4>
+        <form method="post" id="aiProviderForm">
+          <input type="hidden" name="action" value="update_provider" />
+          <select name="ai_provider" onchange="document.getElementById('aiProviderForm').submit()">
+            <option value="groq" {% if session.get('ai_provider', 'groq') == 'groq' %}selected{% endif %}>Groq (Cloud)</option>
+            <option value="ollama" {% if session.get('ai_provider') == 'ollama' %}selected{% endif %}>Ollama (Local)</option>
+          </select>
+        </form>
+      </div>
+
+      <div class="updates-box">
+        <h4>School Updates</h4>
+        <ul>
+          <li>Course registration closes April 30th.</li>
+          <li>First semester exams begin May 10th.</li>
+          <li>Hostel application open for 200L &amp; 300L.</li>
+          <li>Convocation holds June 15th.</li>
+        </ul>
+      </div>
+    </aside>
+
+    <!-- MAIN CHAT -->
+    <div class="chat-container">
+      <!-- Top bar -->
+      <div class="chat-topbar">
+        <div class="topbar-avatar">
+          {{ selected_advisor.split(' ')[-1][0] }}
+        </div>
+        <div class="topbar-info">
+          <h2>{{ selected_advisor }}</h2>
+          <span>Level Advisor &nbsp;•&nbsp; Online</span>
+        </div>
+        <nav class="topbar-nav">
+
+          <a href="/logout" class="logout">Logout</a>
+        </nav>
+      </div>
+
+      <!-- Messages -->
+      <div class="messages-area" id="messagesArea">
+        {% if not chat_history %}
+        <div class="empty-state">
+          <div class="empty-icon">💬</div>
+          <p>
+            Start a conversation with <strong>{{ selected_advisor }}</strong>
+          </p>
+          <p style="margin-top: 6px; font-size: 12px">
+            Ask about courses, exams, halls, or anything academic.
+          </p>
+        </div>
+        {% endif %} {% for msg in chat_history %} {% if msg.role == 'user' %}
+        <div class="msg-row user">
+          <div
+            class="bubble-avatar"
+            style="background: linear-gradient(135deg, #2980b9, #48c6ef)"
+          >
+            You
+          </div>
+          <div class="bubble">{{ msg.content }}</div>
+        </div>
+        {% else %}
+        <div class="msg-row advisor">
+          <div
+            class="bubble-avatar"
+            style="background: linear-gradient(135deg, #8e44ad, #2980b9)"
+          >
+            {{ msg.advisor.split(' ')[-1][0] }}
+          </div>
+          <div class="bubble">
+            <div class="bubble-meta">
+              {{ msg.advisor }} {% if msg.ai %}<span class="ai-badge"
+                >⚡ AI</span
+              >{% endif %}
+            </div>
+            {{ msg.content }}
+          </div>
+        </div>
+        {% endif %} {% endfor %}
+      </div>
+
+      <!-- Input bar -->
+      <div class="input-bar">
+        <form method="post" id="chatForm">
+          <input type="hidden" name="advisor" value="{{ selected_advisor }}" />
+          <textarea
+            id="msgInput"
+            name="message"
+            placeholder="Message {{ selected_advisor }}…"
+            rows="1"
+            required
+            oninput="autoResize(this)"
+            onkeydown="
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                document.getElementById('chatForm').submit();
+              }
+            "
+          ></textarea>
+          <button type="submit" class="send-btn" aria-label="Send">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      // Auto-scroll to bottom on load
+      const area = document.getElementById("messagesArea");
+      if (area) area.scrollTop = area.scrollHeight;
+
+      // Auto-resize textarea
+      function autoResize(el) {
+        el.style.height = "auto";
+        el.style.height = Math.min(el.scrollHeight, 120) + "px";
+      }
+
+      // AJAX chat form submission
+      const chatForm = document.getElementById("chatForm");
+      const msgInput = document.getElementById("msgInput");
+      chatForm.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const formData = new FormData(chatForm);
+        const message = formData.get("message").trim();
+        if (!message) return;
+        // Disable input/button while sending
+        msgInput.disabled = true;
+        chatForm.querySelector(".send-btn").disabled = true;
+        try {
+          const response = await fetch(
+            chatForm.action || window.location.pathname,
+            {
+              method: "POST",
+              body: formData,
+            },
+          );
+          if (response.ok) {
+            const html = await response.text();
+            // Replace the chat area with new HTML (simple way)
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+            const newArea = doc.getElementById("messagesArea");
+            if (newArea && area) {
+              area.innerHTML = newArea.innerHTML;
+              area.scrollTop = area.scrollHeight;
+            }
+            msgInput.value = "";
+            autoResize(msgInput);
+          } else {
+            alert("Failed to send message.");
+          }
+        } catch (err) {
+          alert("Error sending message.");
+        } finally {
+          msgInput.disabled = false;
+          chatForm.querySelector(".send-btn").disabled = false;
+          msgInput.focus();
+        }
+      });
+      // Optional: focus textarea on page load
+      msgInput && msgInput.focus();
+    </script>
+  </body>
+</html>
