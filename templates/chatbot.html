@@ -14,8 +14,13 @@
     <!-- SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h3>Advisor</h3>
-        <p>Select who to talk to</p>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div>
+            <h3>Advisor</h3>
+            <p>Select who to talk to</p>
+          </div>
+          <button class="mobile-close-btn" onclick="document.querySelector('.sidebar').classList.remove('open')">✕</button>
+        </div>
       </div>
 
       <form method="post" id="advisorForm">
@@ -72,6 +77,9 @@
     <div class="chat-container">
       <!-- Top bar -->
       <div class="chat-topbar">
+        <button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.add('open')" aria-label="Toggle Menu">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="#fff"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+        </button>
         <div class="topbar-avatar">
           {{ selected_advisor.split(' ')[-1][0] }}
         </div>
