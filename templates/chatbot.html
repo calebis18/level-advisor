@@ -11,6 +11,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   </head>
   <body>
+    <!-- Ambient Background Orbs -->
+    <div class="bg-orb-1"></div>
+    <div class="bg-orb-2"></div>
+
     <!-- SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-header">
@@ -85,7 +89,10 @@
         </div>
         <div class="topbar-info">
           <h2>{{ selected_advisor }}</h2>
-          <span>Level Advisor &nbsp;•&nbsp; Online</span>
+          <div class="status-indicator">
+            <div class="status-dot"></div>
+            Level Advisor
+          </div>
         </div>
         <nav class="topbar-nav">
 
@@ -136,8 +143,8 @@
       </div>
 
       <!-- Input bar -->
-      <div class="input-bar">
-        <form method="post" id="chatForm">
+      <div class="input-container">
+        <form method="post" id="chatForm" class="input-bar-form">
           <input type="hidden" name="advisor" value="{{ selected_advisor }}" />
           <textarea
             id="msgInput"
