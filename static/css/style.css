@@ -592,8 +592,117 @@ body {
   background: rgba(239, 68, 68, 0.8);
 }
 
+/* Auth Container (Login/Register) */
+.auth-container {
+  margin: auto;
+  width: 90%;
+  max-width: 420px;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 40px;
+  border-radius: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  z-index: 10;
+  position: relative;
+}
+
+.auth-container h2 {
+  text-align: center;
+  color: #fff;
+  margin-bottom: 30px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.auth-container .error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 10px;
+  border-radius: 8px;
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.auth-container label {
+  display: block;
+  color: rgba(248, 250, 252, 0.7);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.auth-container input[type="text"],
+.auth-container input[type="password"] {
+  width: 100%;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  font-size: 15px;
+  color: #fff;
+  font-family: "Inter", sans-serif;
+  transition: all 0.3s;
+}
+
+.auth-container input[type="text"]:focus,
+.auth-container input[type="password"]:focus {
+  border-color: rgba(139, 92, 246, 0.6);
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+  outline: none;
+  background: rgba(30, 41, 59, 0.8);
+}
+
+.auth-container button {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.auth-container button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+}
+
+.auth-container .login-link {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 14px;
+  color: rgba(248, 250, 252, 0.6);
+}
+
+.auth-container .login-link a {
+  color: #a78bfa;
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.auth-container .login-link a:hover {
+  color: #c4b5fd;
+}
+
 /* responsive */
 @media (max-width: 768px) {
+  .auth-container {
+    padding: 30px 20px;
+    border-radius: 16px;
+  }
   .mobile-menu-btn {
     display: block;
   }
