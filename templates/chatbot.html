@@ -20,40 +20,12 @@
       <div class="sidebar-header">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
           <div>
-            <h3>Advisor</h3>
-            <p>Select who to talk to</p>
+            <h3>Level Advisor</h3>
+            <p>Always here to help</p>
           </div>
           <button class="mobile-close-btn" onclick="document.querySelector('.sidebar').classList.remove('open')">✕</button>
         </div>
       </div>
-
-      <form method="post" id="advisorForm">
-        <ul class="advisor-list">
-          {% set colors =
-          ['#e74c3c','#8e44ad','#2980b9','#16a085','#d35400','#c0392b','#27ae60','#2471a3','#884ea0']
-          %} {% for adv in advisors %}
-          <li
-            class="advisor-item{% if adv == selected_advisor %} selected{% endif %}"
-          >
-            <label>
-              <input
-                type="radio"
-                name="advisor"
-                value="{{ adv }}"
-                onchange="document.getElementById('advisorForm').submit()"
-                {% if adv == selected_advisor %}checked{% endif %}
-              />
-              <span
-                class="advisor-avatar"
-                style="background: {{ colors[loop.index0 % colors|length] }}"
-                >{{ adv.split(' ')[-1][0] }}</span
-              >
-              {{ adv }}
-            </label>
-          </li>
-          {% endfor %}
-        </ul>
-      </form>
 
       <div class="ai-provider-box">
         <h4>AI Engine</h4>
@@ -145,7 +117,6 @@
       <!-- Input bar -->
       <div class="input-container">
         <form method="post" id="chatForm" class="input-bar-form">
-          <input type="hidden" name="advisor" value="{{ selected_advisor }}" />
           <textarea
             id="msgInput"
             name="message"

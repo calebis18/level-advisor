@@ -41,11 +41,8 @@ def init_db():
 
 
 
-# Advisors list
-ADVISORS = [
-	'Mr Odufuwa', 'Mrs Afolalu', 'Dr Mogaji', 'Dr Adewole', 'Dr Folorunsho',
-	'Mr Akinsonyan', 'Dr Mrs Daramola', 'Dr Hassan', 'Mr Chinedu'
-]
+# Universal Advisor
+UNIVERSAL_ADVISOR = 'Level Advisor'
 
 # Decorator to require login
 def login_required(f):
@@ -99,23 +96,18 @@ def logout():
 	return redirect(url_for('login'))
 
 
-# Chatbot with advisor selection
+# Chatbot with Level Advisor
 @app.route('/chatbot', methods=['GET', 'POST'])
 @login_required
 def chatbot():
 	import random
 	from openai import OpenAI
-	selected_advisor = session.get('selected_advisor', ADVISORS[0])
+	selected_advisor = UNIVERSAL_ADVISOR
 	if request.method == 'POST':
 		if request.form.get('action') == 'update_provider':
 			session['ai_provider'] = request.form.get('ai_provider', 'groq')
 			return redirect(url_for('chatbot'))
 
-		if 'advisor' in request.form and request.form.get('advisor') != session.get('selected_advisor'):
-			new_advisor = request.form['advisor']
-			session['chat_history'] = []
-			selected_advisor = new_advisor
-			session['selected_advisor'] = selected_advisor
 		user_message = request.form.get('message', '').strip()
 		if user_message:
 			response = None
@@ -196,7 +188,7 @@ def chatbot():
 			session['chat_history'] = history
 
 	chat_history = session.get('chat_history', [])
-	return render_template('chatbot.html', chat_history=chat_history, advisors=ADVISORS, selected_advisor=selected_advisor)
+	return render_template('chatbot.html', chat_history=chat_history, selected_advisor=selected_advisor)
 
 
 if __name__ == '__main__':
