@@ -707,11 +707,6 @@ def chatbot():
 	return render_template('chatbot.html', chat_history=chat_history, selected_advisor=selected_advisor)
 
 
-if DATABASE_URL:
-	# Vercel imports this module instead of running it as __main__.
-	# Initialise the Supabase schema once before handling API requests.
-	init_db()
-
 if __name__ == '__main__':
 	init_db()
 	app.run(debug=True)
