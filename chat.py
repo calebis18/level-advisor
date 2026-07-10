@@ -1,15 +1,20 @@
-import sys
 import os
 import sqlite3
-from flask import Flask, render_template, request, redirect, url_for, session, g
+from datetime import datetime, timezone
+from flask import Flask, jsonify, render_template, request, redirect, url_for, session, g
 from functools import wraps
 from dotenv import load_dotenv
+from werkzeug.security import check_password_hash, generate_password_hash
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here'  # Change this to a secure random key
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'development-only-change-me')
+app.config.update(
+	SESSION_COOKIE_HTTPONLY=True,
+	SESSION_COOKIE_SAMESITE='Lax',
+)
 
 DATABASE = 'users.db'
 
@@ -17,6 +22,7 @@ def get_db():
 	db = getattr(g, '_database', None)
 	if db is None:
 		db = g._database = sqlite3.connect(DATABASE)
+		db.row_factory = sqlite3.Row
 	return db
 
 @app.teardown_appcontext
@@ -29,12 +35,47 @@ def init_db():
 	with app.app_context():
 		db = get_db()
 		cursor = db.cursor()
+		columns = {row['name'] for row in cursor.execute("PRAGMA table_info(users)")}
+		# Migrate the original username/password-only table once, preserving old users.
+		if columns and 'password_hash' not in columns:
+			cursor.execute('ALTER TABLE users RENAME TO users_legacy')
+			columns = set()
 		cursor.execute('''CREATE TABLE IF NOT EXISTS users (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			username TEXT UNIQUE NOT NULL,
-			password TEXT NOT NULL
+			matric_number TEXT UNIQUE NOT NULL,
+			email TEXT UNIQUE NOT NULL,
+			first_name TEXT NOT NULL,
+			last_name TEXT NOT NULL,
+			department TEXT NOT NULL,
+			level TEXT NOT NULL,
+			password_hash TEXT NOT NULL,
+			created_at TEXT NOT NULL
 		)''')
+		if columns == set() and cursor.execute(
+			"SELECT name FROM sqlite_master WHERE type='table' AND name='users_legacy'"
+		).fetchone():
+			for legacy_user in cursor.execute('SELECT username, password FROM users_legacy').fetchall():
+				cursor.execute(
+					'''INSERT INTO users
+					(matric_number, email, first_name, last_name, department, level, password_hash, created_at)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+					(legacy_user['username'], f"{legacy_user['username']}@legacy.local", 'Existing', 'Student',
+					 'Not set', 'Not set', generate_password_hash(legacy_user['password']),
+					 datetime.now(timezone.utc).isoformat())
+				)
+			cursor.execute('DROP TABLE users_legacy')
 		db.commit()
+
+
+@app.after_request
+def add_api_cors_headers(response):
+	"""Allow the local React development server to call the JSON API."""
+	if request.path.startswith('/api/'):
+		response.headers['Access-Control-Allow-Origin'] = 'http://localhost:5173'
+		response.headers['Access-Control-Allow-Credentials'] = 'true'
+		response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+		response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+	return response
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -289,22 +330,203 @@ UNIVERSAL_ADVISOR = 'Level Advisor'
 def login_required(f):
 	@wraps(f)
 	def decorated_function(*args, **kwargs):
-		if 'username' not in session:
+		if 'user_id' not in session:
 			return redirect(url_for('login'))
 		return f(*args, **kwargs)
 	return decorated_function
+
+
+def current_user():
+	if 'user_id' not in session:
+		return None
+	return get_db().execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+
+
+def user_payload(user):
+	return {
+		'id': user['id'],
+		'matricNumber': user['matric_number'],
+		'email': user['email'],
+		'firstName': user['first_name'],
+		'lastName': user['last_name'],
+		'department': user['department'],
+		'level': user['level'],
+	}
+
+
+def api_error(message, status=400, fields=None):
+	payload = {'error': message}
+	if fields:
+		payload['fields'] = fields
+	return jsonify(payload), status
+
+
+@app.route('/api/register', methods=['POST', 'OPTIONS'])
+def api_register():
+	if request.method == 'OPTIONS':
+		return '', 204
+	data = request.get_json(silent=True) or {}
+	fields = {key: str(data.get(key, '')).strip() for key in (
+		'firstName', 'lastName', 'matricNumber', 'email', 'department', 'level', 'password', 'confirmPassword'
+	)}
+	errors = {}
+	for key in ('firstName', 'lastName', 'matricNumber', 'email', 'department', 'level', 'password'):
+		if not fields[key]:
+			errors[key] = 'This field is required.'
+	if fields['email'] and ('@' not in fields['email'] or '.' not in fields['email'].split('@')[-1]):
+		errors['email'] = 'Enter a valid email address.'
+	if fields['password'] and len(fields['password']) < 8:
+		errors['password'] = 'Use at least 8 characters.'
+	if fields['password'] != fields['confirmPassword']:
+		errors['confirmPassword'] = 'Passwords do not match.'
+	if errors:
+		return api_error('Please correct the highlighted fields.', fields=errors)
+
+	db = get_db()
+	try:
+		cursor = db.execute(
+			'''INSERT INTO users
+			(matric_number, email, first_name, last_name, department, level, password_hash, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+			(fields['matricNumber'].upper(), fields['email'].lower(), fields['firstName'], fields['lastName'],
+			 fields['department'], fields['level'], generate_password_hash(fields['password']),
+			 datetime.now(timezone.utc).isoformat())
+		)
+		db.commit()
+	except sqlite3.IntegrityError:
+		return api_error('An account already exists with that email or matric number.', 409)
+
+	user = db.execute('SELECT * FROM users WHERE id = ?', (cursor.lastrowid,)).fetchone()
+	session.clear()
+	session['user_id'] = user['id']
+	return jsonify({'message': 'Account created successfully.', 'user': user_payload(user)}), 201
+
+
+@app.route('/api/login', methods=['POST', 'OPTIONS'])
+def api_login():
+	if request.method == 'OPTIONS':
+		return '', 204
+	data = request.get_json(silent=True) or {}
+	identifier = str(data.get('identifier', '')).strip()
+	password = str(data.get('password', ''))
+	if not identifier or not password:
+		return api_error('Enter your email or matric number and password.')
+	user = get_db().execute(
+		'SELECT * FROM users WHERE email = ? OR matric_number = ?',
+		(identifier.lower(), identifier.upper())
+	).fetchone()
+	if not user or not check_password_hash(user['password_hash'], password):
+		return api_error('Invalid email/matric number or password.', 401)
+	session.clear()
+	session['user_id'] = user['id']
+	return jsonify({'message': 'Logged in successfully.', 'user': user_payload(user)})
+
+
+@app.route('/api/logout', methods=['POST', 'OPTIONS'])
+def api_logout():
+	if request.method == 'OPTIONS':
+		return '', 204
+	session.clear()
+	return '', 204
+
+
+@app.route('/api/me', methods=['GET', 'OPTIONS'])
+def api_me():
+	if request.method == 'OPTIONS':
+		return '', 204
+	user = current_user()
+	if not user:
+		return api_error('You need to log in.', 401)
+	return jsonify({'user': user_payload(user)})
+
+
+def generate_advisor_response(user_message, user):
+	"""Return a curated answer first, then an optional AI/fallback answer."""
+	import random
+	from openai import OpenAI
+	selected_advisor = UNIVERSAL_ADVISOR
+	matched_answer, _ = find_best_match(user_message)
+	if matched_answer:
+		return matched_answer, False
+
+	ai_provider = session.get('ai_provider', 'groq')
+	client = None
+	model_name = ''
+	if ai_provider == 'groq' and os.environ.get('GROQ_API_KEY'):
+		client = OpenAI(base_url='https://api.groq.com/openai/v1', api_key=os.environ['GROQ_API_KEY'])
+		model_name = 'llama-3.1-8b-instant'
+	elif ai_provider == 'ollama':
+		client = OpenAI(base_url='http://localhost:11434/v1', api_key='ollama')
+		model_name = 'llama3'
+	if client:
+		try:
+			completion = client.chat.completions.create(
+				model=model_name,
+				messages=[
+					{'role': 'system', 'content': (
+						f'You are {selected_advisor}, a friendly university advisor. The student is '
+						f'{user["first_name"]} {user["last_name"]}, in {user["department"]}, {user["level"]}. '
+						'Give clear, concise and encouraging academic guidance.'
+					)},
+					{'role': 'user', 'content': user_message},
+				], max_tokens=300, temperature=0.7,
+			)
+			return completion.choices[0].message.content.strip(), True
+		except Exception:
+			pass
+
+	msg = user_message.lower()
+	if any(word in msg for word in ['level', 'course', 'class', 'register', 'registration']):
+		return random.choice([
+			'Focus on your core courses and seek help early if you are struggling.',
+			'Remember to balance your elective and core courses for a successful semester.',
+			'For registration problems, contact the academic office or your level advisor directly.',
+		]), False
+	if any(word in msg for word in ['exam', 'test', 'result', 'grade', 'score']):
+		return random.choice([
+			'Prepare early, review past questions, and study consistently.',
+			'If you are worried about your grades, speak with your lecturer or level advisor promptly.',
+		]), False
+	return 'Could you share a little more detail? I can help with courses, exams, registration, and university life.', False
+
+
+@app.route('/api/chat', methods=['POST', 'OPTIONS'])
+def api_chat():
+	if request.method == 'OPTIONS':
+		return '', 204
+	user = current_user()
+	if not user:
+		return api_error('You need to log in.', 401)
+	data = request.get_json(silent=True) or {}
+	message = str(data.get('message', '')).strip()
+	if not message:
+		return api_error('Write a message before sending it.')
+	if len(message) > 2_000:
+		return api_error('Keep messages below 2,000 characters.')
+	response, ai_powered = generate_advisor_response(message, user)
+	return jsonify({
+		'reply': response,
+		'aiPowered': ai_powered,
+		'advisor': UNIVERSAL_ADVISOR,
+	})
 
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
 	error = None
 	if request.method == 'POST':
-		username = request.form['username']
+		username = request.form['username'].strip()
 		password = request.form['password']
 		db = get_db()
 		cursor = db.cursor()
 		try:
-			cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
+			cursor.execute(
+				'''INSERT INTO users
+				(matric_number, email, first_name, last_name, department, level, password_hash, created_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+				(username.upper(), f'{username.lower()}@student.local', 'Student', username, 'Not set', 'Not set',
+				 generate_password_hash(password), datetime.now(timezone.utc).isoformat())
+			)
 			db.commit()
 			return redirect(url_for('login'))
 		except sqlite3.IntegrityError:
@@ -317,14 +539,14 @@ def register():
 def login():
 	error = None
 	if request.method == 'POST':
-		username = request.form['username']
+		username = request.form['username'].strip()
 		password = request.form['password']
 		db = get_db()
 		cursor = db.cursor()
-		cursor.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, password))
+		cursor.execute('SELECT * FROM users WHERE matric_number = ? OR email = ?', (username.upper(), username.lower()))
 		user = cursor.fetchone()
-		if user:
-			session['username'] = username
+		if user and check_password_hash(user['password_hash'], password):
+			session['user_id'] = user['id']
 			return redirect(url_for('chatbot'))
 		else:
 			error = 'Invalid credentials. Please try again.'
@@ -440,6 +662,7 @@ def chatbot():
 	return render_template('chatbot.html', chat_history=chat_history, selected_advisor=selected_advisor)
 
 
+init_db()
+
 if __name__ == '__main__':
-	init_db()
 	app.run(debug=True)
