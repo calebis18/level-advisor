@@ -21,6 +21,16 @@ Flask provides the student-account and chat API. The `frontend` folder is a Reac
 
 3. Open `http://localhost:5173`.
 
+## Prepare a Vercel deployment
+
+The Flask app serves the compiled React interface at the deployed root URL. Before each GitHub push that should update the live interface, run this in `frontend`:
+
+```powershell
+npm run build
+```
+
+This creates `static/react/`, which must be included in the commit. After Vercel redeploys, visit the normal project URL (not port 5173).
+
 ## Environment variables
 
 Set these in `.env`:

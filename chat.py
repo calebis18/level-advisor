@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from datetime import datetime, timezone
-from flask import Flask, jsonify, render_template, request, redirect, url_for, session, g
+from flask import Flask, jsonify, render_template, request, redirect, url_for, session, g, send_from_directory
 from functools import wraps
 from dotenv import load_dotenv
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -534,7 +534,6 @@ def register():
 	return render_template('register.html', error=error)
 
 
-@app.route('/', methods=['GET', 'POST'])
 @app.route('/login', methods=['GET', 'POST'])
 def login():
 	error = None
@@ -551,6 +550,12 @@ def login():
 		else:
 			error = 'Invalid credentials. Please try again.'
 	return render_template('login.html', error=error)
+
+
+@app.route('/')
+def frontend():
+	"""Serve the production React build; Vite handles the same screen in development."""
+	return send_from_directory(os.path.join(app.static_folder, 'react'), 'index.html')
 
 
 @app.route('/logout')
@@ -662,7 +667,6 @@ def chatbot():
 	return render_template('chatbot.html', chat_history=chat_history, selected_advisor=selected_advisor)
 
 
-init_db()
-
 if __name__ == '__main__':
+	init_db()
 	app.run(debug=True)
