@@ -2,3 +2,4 @@
 .venv/
 __pycache__/
 frontend/node_modules/
+users.db

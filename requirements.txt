@@ -3,3 +3,4 @@ python-dotenv
 openai
 scikit-learn
 numpy
+psycopg[binary]
